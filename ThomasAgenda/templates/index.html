@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+  <title>Schedule Table</title>
+  <style>
+    .assigned {
+      background-color: green;
+      color: white;
+    }
+    .reset-button {
+      float: right;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mt-5">Schedule Table</h1>
+    <button class="btn btn-danger reset-button" onclick="resetAssignments()">Reset</button>
+    <table class="table table-bordered mt-3">
+      <thead>
+        <tr>
+          <th></th>
+          {% for day_index, day in days_with_index %}
+            <th>{{ day }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for hour_index, hour in hours_with_index %}
+          <tr>
+            <td>{{ hour }}</td>
+            {% for day_index, day in days_with_index %}
+              <td>
+                <select class="form-control" data-day="{{ day_index }}" data-hour="{{ hour_index }}">
+                  {% for option in options %}
+                    <option value="{{ option }}" {% if assignments[(day_index, hour_index)] == option %}selected{% endif %}>
+                      {{ option }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      const optionLimits = {
+        "none": Infinity,
+        "TV": 2,
+        "PC/PHONE": 3,
+        "PLAY": 3,
+        "STUDY": 2,
+        "READ HEBREW": 1,
+        "READ ENGLISH": 1
+      };
+
+      $('select').each(function() {
+        const day = $(this).data('day');
+        const hour = $(this).data('hour');
+        const value = $(this).val();
+        if (value !== 'none') {
+          $(this).addClass('assigned');
+        }
+        $(this).data('prevOption', value);
+      });
+
+      $('select').change(function() {
+        const selectedOption = $(this).val();
+        const day = $(this).data('day');
+        const hour = $(this).data('hour');
+        const prevOption = $(this).data('prevOption');
+
+        updateAssignment(day, hour, selectedOption);
+
+        // Handle the color change
+        if (selectedOption !== 'none') {
+          $(this).addClass('assigned');
+        } else {
+          $(this).removeClass('assigned');
+        }
+
+        $(this).data('prevOption', selectedOption);
+
+        updateOptionAvailability(day);
+      });
+
+      function updateOptionAvailability(day) {
+        const counts = {};
+
+        // Count the number of assignments for each option in the current column
+        $('select[data-day=' + day + ']').each(function() {
+          const option = $(this).val();
+          if (!counts[option]) {
+            counts[option] = 0;
+          }
+          counts[option]++;
+        });
+
+        // Enable or disable options based on the count and limit
+        $('select[data-day=' + day + ']').each(function() {
+          $(this).find('option').each(function() {
+            const option = $(this).val();
+            if (option !== 'none' && counts[option] >= optionLimits[option]) {
+              $(this).prop('disabled', true);
+            } else {
+              $(this).prop('disabled', false);
+            }
+          });
+        });
+      }
+
+      function updateAssignment(day, hour, value) {
+        $.ajax({
+          url: '/update_assignment',
+          method: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({
+            day: day,
+            hour: hour,
+            value: value
+          }),
+          success: function(response) {
+            console.log("Assignment updated successfully");
+          }
+        });
+      }
+
+      window.resetAssignments = function() {
+        $.ajax({
+          url: '/reset_assignments',
+          method: 'POST',
+          success: function(response) {
+            $('select').each(function() {
+              $(this).val('none').change();
+            });
+          }
+        });
+      };
+
+      // Initial update of option availability
+      for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+        updateOptionAvailability(dayIndex);
+      }
+    });
+  </script>
+</body>
+</html>
